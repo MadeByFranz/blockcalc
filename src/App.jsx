@@ -24,7 +24,7 @@ const T = {
     stepped: "Stepped", uniform: "Uniform", steps: "Steps (run m × courses)", addStep: "+ step",
     waste: "Waste (%)", fill: "Fill", blocks: "Blocks (incl. waste)", fillConc: "Fill concrete (to order)",
     hRebar: "Horizontal rebar", vRebar: "Vertical rebar", area: "Wall area",
-    grossVol: "Gross wall volume (envelope)", weight: "Filled wall weight", bars6: "6 m bars",
+    grossVol: "Gross wall volume (envelope)", weight: "Filled wall weight", rebarTotal: "Rebar total (H+V)",
     hEvery: "Horiz. bars every … course", hCount: "Bars per row", vcc: "Vertical cc (mm)", dia: "Ø",
     course: "Course", full: "full", cut: "cut", top: "top", print: "Print / PDF", obj: "3D export (OBJ) · Pro",
     ftLen: "Total run (m)", ftW: "Width (mm)", ftH: "Height (mm)", ftBars: "Longitudinal bars",
@@ -43,7 +43,7 @@ const T = {
     stepped: "Porrastettu", uniform: "Tasainen", steps: "Portaat (jm × kerrokset)", addStep: "+ porras",
     waste: "Hukka (%)", fill: "Valu", blocks: "Harkot (sis. hukka)", fillConc: "Valubetoni (tilattava)",
     hRebar: "Vaakaraudoitus", vRebar: "Pystyraudoitus", area: "Seinäala",
-    grossVol: "Seinän bruttotilavuus", weight: "Valetun seinän paino", bars6: "6 m tankoja",
+    grossVol: "Seinän bruttotilavuus", weight: "Valetun seinän paino", rebarTotal: "Raudoitus yhteensä (V+P)",
     hEvery: "Vaakateräs joka … kerros", hCount: "Tankoja/rivi", vcc: "Pystyjako cc (mm)", dia: "Ø",
     course: "Kerros", full: "kokonaista", cut: "katkaisu", top: "yläreuna", print: "Tulosta / PDF", obj: "3D-vienti (OBJ) · Pro",
     ftLen: "Kokonaispituus (m)", ftW: "Leveys (mm)", ftH: "Korkeus (mm)", ftBars: "Pitkittäisteräkset",
@@ -62,7 +62,7 @@ const T = {
     stepped: "Trappad", uniform: "Jämn", steps: "Steg (lm × skift)", addStep: "+ steg",
     waste: "Spill (%)", fill: "Fyllning", blocks: "Block (inkl. spill)", fillConc: "Fyllbetong (att beställa)",
     hRebar: "Horisontell armering", vRebar: "Vertikal armering", area: "Väggyta",
-    grossVol: "Väggens bruttovolym", weight: "Gjuten väggvikt", bars6: "6 m stänger",
+    grossVol: "Väggens bruttovolym", weight: "Gjuten väggvikt", rebarTotal: "Armering totalt (H+V)",
     hEvery: "Horisontalstål vart … skift", hCount: "Stänger/rad", vcc: "Vertikal cc (mm)", dia: "Ø",
     course: "Skift", full: "hela", cut: "kap", top: "överkant", print: "Skriv ut / PDF", obj: "3D-export (OBJ) · Pro",
     ftLen: "Total längd (m)", ftW: "Bredd (mm)", ftH: "Höjd (mm)", ftBars: "Längsgående stänger",
@@ -655,11 +655,11 @@ export default function BlockCalc() {
                   <Stat label={t.blocks} value={totals.blocks.toLocaleString()} unit="pcs" accent />
                   <Stat label={t.fillConc} value={fmt(totals.fillM3, 2)} unit="m³" accent />
                   <Stat label={t.hRebar} value={fmt(totals.hLen, 0)} unit={`m · ${fmt(totals.hKg, 0)} kg`} />
-                  <Stat label={t.vRebar} value={fmt(totals.vLen, 0)} unit={`m · ${totals.vBars} bars`} />
+                  <Stat label={t.vRebar} value={fmt(totals.vLen, 0)} unit={`m · ${fmt(totals.vKg, 0)} kg`} />
                   <Stat label={t.area} value={fmt(totals.area)} unit="m²" />
                   <Stat label={t.grossVol} value={fmt(totals.grossVol, 2)} unit="m³" />
                   <Stat label={t.weight} value={fmt(totals.weightKg / 1000, 1)} unit="t" />
-                  <Stat label={t.bars6} value={`${fmt(totals.hLen, 0)} + ${fmt(totals.vLen, 0)}`} unit={`m (${Math.ceil(totals.hLen / 6)} + ${Math.ceil(totals.vLen / 6)} × 6 m)`} />
+                  <Stat label={t.rebarTotal} value={fmt(totals.hLen + totals.vLen, 0)} unit="m" />
                 </div>
                 <div className="border-t px-4 py-3 font-mono text-xs flex flex-wrap gap-x-6 gap-y-1" style={{ borderColor: LINE, color: MUTED }}>
                   {Object.entries(totals.byType).map(([k, n]) => (
@@ -675,7 +675,7 @@ export default function BlockCalc() {
                 <table className="w-full text-sm font-mono">
                   <thead>
                     <tr className="text-xs uppercase tracking-wider text-left" style={{ color: MUTED }}>
-                      {[t.segment, "m²", "pcs", "m³", "kg H", "kg V", t.lifts].map((h) => (
+                      {[t.segment, "m²", "pcs", "m³", "m H", "m V", t.lifts].map((h) => (
                         <th key={h} className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{h}</th>
                       ))}
                     </tr>
@@ -688,8 +688,8 @@ export default function BlockCalc() {
                         <td className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{fmt(r.area)}</td>
                         <td className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{r.blocks}</td>
                         <td className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{fmt(r.fillM3, 2)}</td>
-                        <td className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{fmt(r.hKg, 0)}</td>
-                        <td className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{fmt(r.vKg, 0)}</td>
+                        <td className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{fmt(r.hLen, 0)}</td>
+                        <td className="px-3 py-2 border-b" style={{ borderColor: LINE }}>{fmt(r.vLen, 0)}</td>
                         <td className="px-3 py-2 border-b" style={{ borderColor: LINE, color: r.lifts > 1 ? REBAR : MUTED }}>{r.lifts}</td>
                       </tr>
                     ))}
@@ -700,8 +700,8 @@ export default function BlockCalc() {
                       <td className="px-3 py-2 font-semibold">{fmt(totals.area)}</td>
                       <td className="px-3 py-2 font-semibold" style={{ color: REBAR }}>{totals.blocks}</td>
                       <td className="px-3 py-2 font-semibold" style={{ color: REBAR }}>{fmt(totals.fillM3, 2)}</td>
-                      <td className="px-3 py-2 font-semibold">{fmt(totals.hKg, 0)}</td>
-                      <td className="px-3 py-2 font-semibold">{fmt(totals.vKg, 0)}</td>
+                      <td className="px-3 py-2 font-semibold">{fmt(totals.hLen, 0)}</td>
+                      <td className="px-3 py-2 font-semibold">{fmt(totals.vLen, 0)}</td>
                       <td className="px-3 py-2"></td>
                     </tr>
                   </tfoot>

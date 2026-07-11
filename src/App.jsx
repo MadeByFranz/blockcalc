@@ -18,7 +18,7 @@ const fmt = (n, d = 1) => Number(n).toLocaleString("en-US", { minimumFractionDig
 const T = {
   en: {
     share: "Copy share link", copied: "Link copied", total: "Total",
-    walls: "Wall segments", assumptions: "Assumptions", elevation: "Elevation", schedule: " schedule",
+    walls: "Wall segments", assumptions: "Assumptions", elevation: "Elevation", schedule: "Material schedule",
     cutlist: "Cut list per course", footing: "Footing mode", addWall: "+ Add wall", example: "Load example",
     length: "Length (m)", courses: "Courses (à 200 mm)", type: "Block type", openings: "Openings (m²)",
     stepped: "Stepped", uniform: "Uniform", steps: "Steps (run m × courses)", addStep: "+ step",
@@ -56,7 +56,7 @@ const T = {
   },
   sv: {
     share: "Kopiera delningslänk", copied: "Länk kopierad", total: "Totalt",
-    walls: "Väggsektioner", assumptions: "Antaganden", elevation: "Fasad", schedule: "förteckning",
+    walls: "Väggsektioner", assumptions: "Antaganden", elevation: "Fasad", schedule: "Materialförteckning",
     cutlist: "Kaplista per skift", footing: "Grundsula", addWall: "+ Lägg till vägg", example: "Ladda exempel",
     length: "Längd (m)", courses: "Skift (à 200 mm)", type: "Blocktyp", openings: "Öppningar (m²)",
     stepped: "Trappad", uniform: "Jämn", steps: "Steg (lm × skift)", addStep: "+ steg",
@@ -221,7 +221,7 @@ function DimHeader({ children }) {
     </div>
   );
 }
-function ({ label, value, unit, accent }) {
+function Stat({ label, value, unit, accent }) {
   return (
     <div className="flex flex-col gap-0.5 py-2">
       <span className="text-xs uppercase tracking-wider" style={{ color: MUTED }}>{label}</span>
@@ -331,7 +331,7 @@ function WallPreview({ seg, t }) {
 
 // ---------- footing calculator ----------
 function FootingCalc({ t, wastePct }) {
-  const [f, setF] = usee({ len: 32.5, w: 600, h: 250, nBars: 3, dia: 10, dowelCc: 600, dowelLen: 750 });
+  const [f, setF] = useState({ len: 32.5, w: 600, h: 250, nBars: 3, dia: 10, dowelCc: 600, dowelLen: 750 });
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: +e.target.value || 0 }));
   const waste = 1 + wastePct / 100;
   const conc = (f.w / 1000) * (f.h / 1000) * f.len;
@@ -356,10 +356,10 @@ function FootingCalc({ t, wastePct }) {
         ))}
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 border-t pt-1" style={{ borderColor: LINE }}>
-        < label={t.ftConc} value={fmt(conc * waste, 2)} unit="m³" accent />
-        < label={`${t.ftConc} ${t.perM}`} value={fmt((f.w / 1000) * (f.h / 1000) * 1000, 0)} unit="l/m" />
-        < label={t.ftSteel} value={fmt(steel, 0)} unit={`kg · ${dowels} ⌀10 dowels`} />
-        < label={t.ftForm} value={fmt(2 * f.len * (f.h / 1000), 1)} unit="m²" />
+        <Stat label={t.ftConc} value={fmt(conc * waste, 2)} unit="m³" accent />
+        <Stat label={`${t.ftConc} ${t.perM}`} value={fmt((f.w / 1000) * (f.h / 1000) * 1000, 0)} unit="l/m" />
+        <Stat label={t.ftSteel} value={fmt(steel, 0)} unit={`kg · ${dowels} ⌀10 dowels`} />
+        <Stat label={t.ftForm} value={fmt(2 * f.len * (f.h / 1000), 1)} unit="m²" />
       </div>
     </div>
   );
@@ -654,12 +654,12 @@ export default function BlockCalc() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 px-4">
                   <Stat label={t.blocks} value={totals.blocks.toLocaleString()} unit="pcs" accent />
                   <Stat label={t.fillConc} value={fmt(totals.fillM3, 2)} unit="m³" accent />
-                  <Stat label={t.hRebar} value={fmt(totals.hKg, 0)} unit={`kg · ${fmt(totals.hLen, 0)} m`} />
+                  <Stat label={t.hRebar} value={fmt(totals.hLen, 0)} unit={`m · ${fmt(totals.hKg, 0)} kg`} />
                   <Stat label={t.vRebar} value={fmt(totals.vLen, 0)} unit={`m · ${totals.vBars} bars`} />
                   <Stat label={t.area} value={fmt(totals.area)} unit="m²" />
                   <Stat label={t.grossVol} value={fmt(totals.grossVol, 2)} unit="m³" />
                   <Stat label={t.weight} value={fmt(totals.weightKg / 1000, 1)} unit="t" />
-                  <Stat label={t.bars6} value={`${Math.ceil(totals.hLen / 6)} + ${Math.ceil(totals.vLen / 6)}`} unit="pcs" />
+                  <Stat label={t.bars6} value={`${fmt(totals.hLen, 0)} + ${fmt(totals.vLen, 0)}`} unit={`m (${Math.ceil(totals.hLen / 6)} + ${Math.ceil(totals.vLen / 6)} × 6 m)`} />
                 </div>
                 <div className="border-t px-4 py-3 font-mono text-xs flex flex-wrap gap-x-6 gap-y-1" style={{ borderColor: LINE, color: MUTED }}>
                   {Object.entries(totals.byType).map(([k, n]) => (

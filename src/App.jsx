@@ -17,7 +17,7 @@ const fmt = (n, d = 1) => Number(n).toLocaleString("en-US", { minimumFractionDig
 // ---------- i18n ----------
 const T = {
   en: {
-    share: "Copy share link", copied: "Link copied",
+    share: "Copy share link", copied: "Link copied", total: "Total",
     walls: "Wall segments", assumptions: "Assumptions", elevation: "Elevation", schedule: "Material schedule",
     cutlist: "Cut list per course", footing: "Footing mode", addWall: "+ Add wall", example: "Load example",
     length: "Length (m)", courses: "Courses (à 200 mm)", type: "Block type", openings: "Openings (m²)",
@@ -36,7 +36,7 @@ const T = {
     segment: "Segment",
   },
   fi: {
-    share: "Kopioi jakolinkki", copied: "Linkki kopioitu",
+    share: "Kopioi jakolinkki", copied: "Linkki kopioitu", total: "Yhteensä",
     walls: "Seinälohkot", assumptions: "Oletukset", elevation: "Julkisivu", schedule: "Materiaaliluettelo",
     cutlist: "Katkaisuluettelo kerroksittain", footing: "Anturalaskuri", addWall: "+ Lisää seinä", example: "Lataa esimerkki",
     length: "Pituus (m)", courses: "Kerroksia (à 200 mm)", type: "Harkkotyyppi", openings: "Aukot (m²)",
@@ -55,7 +55,7 @@ const T = {
     segment: "Lohko",
   },
   sv: {
-    share: "Kopiera delningslänk", copied: "Länk kopierad",
+    share: "Kopiera delningslänk", copied: "Länk kopierad", total: "Totalt",
     walls: "Väggsektioner", assumptions: "Antaganden", elevation: "Fasad", schedule: "Materialförteckning",
     cutlist: "Kaplista per skift", footing: "Grundsula", addWall: "+ Lägg till vägg", example: "Ladda exempel",
     length: "Längd (m)", courses: "Skift (à 200 mm)", type: "Blocktyp", openings: "Öppningar (m²)",
@@ -87,7 +87,7 @@ function courseRows(seg) {
   const rows = [];
   for (let i = 0; i < maxC; i++) {
     // row i counted from the top: a run contributes if it has ≥ i+1 courses
-    const len = seg.steps.reduce((a, s) => a + (s.courses >= i + 1 ? s.len : 0), 0);
+    const len = seg.steps.reduce((a, s) => a + (i < s.courses ? s.len : 0), 0);
     rows.push({ length: len });
   }
   return rows;
@@ -98,19 +98,40 @@ const segArea = (seg) => courseRows(seg).reduce((a, r) => a + r.length * BH, 0) 
 // cut list per course with running-bond stagger (odd rows start with a 300 half)
 const rowOffset = (idxFromTop, maxC) => ((maxC - idxFromTop) % 2 === 0 ? 0.3 : 0); // bottom course starts full
 
+// spans (x-ranges in m) occupied by course row `ri` (0 = top). Common top: a run
+// with c courses occupies the TOP c rows; only deeper runs reach the bottom rows.
+function rowSpans(seg, ri) {
+  if (seg.mode !== "stepped") return [[0, seg.length]];
+  let x = 0; const spans = [];
+  for (const s of seg.steps) {
+    if (ri < s.courses) spans.push([x, x + s.len]);
+    x += s.len;
+  }
+  return spans.reduce((a, sp) => {
+    const last = a[a.length - 1];
+    if (last && Math.abs(last[1] - sp[0]) < 1e-6) last[1] = sp[1];
+    else a.push([...sp]);
+    return a;
+  }, []);
+}
+
 function cutList(seg) {
   const rowsAll = courseRows(seg);
+  const maxC = rowsAll.length;
   return rowsAll.map((row, i) => {
-    const L = row.length;
-    const offset = rowOffset(i, rowsAll.length);
-    const bodyLen = Math.max(0, L - offset);
-    const full = Math.floor(bodyLen / BL + 1e-9);
-    const rem = bodyLen - full * BL;
-    const cuts = [];
-    if (offset > 0) cuts.push(300);
-    if (rem > 0.02) cuts.push(Math.round(rem * 1000));
+    const offset = rowOffset(i, maxC);
+    let full = 0; const cuts = [];
+    for (const [sa, sb] of rowSpans(seg, i)) {
+      const spanL = sb - sa;
+      const bodyLen = Math.max(0, spanL - offset);
+      const f = Math.floor(bodyLen / BL + 1e-9);
+      const rem = bodyLen - f * BL;
+      full += f;
+      if (offset > 0 && spanL > offset) cuts.push(300);
+      if (rem > 0.02) cuts.push(Math.round(rem * 1000));
+    }
     const consumed = full + Math.ceil(cuts.reduce((a, c) => a + c, 0) / 600);
-    return { i, L, full, cuts, consumed };
+    return { i, L: row.length, full, cuts, consumed };
   });
 }
 
@@ -156,10 +177,11 @@ function exportOBJ(segments) {
     rows.forEach((row, ri) => {
       const y0 = (maxC - 1 - ri) * BH; // row 0 = top
       const offset = rowOffset(ri, maxC);
-      let x = -offset;
-      while (x < row.length - 1e-6) {
-        const bw = Math.min(BL, row.length - x);
-        const x0 = ox + Math.max(x, 0), x1 = ox + x + bw;
+      for (const [sa, sb] of rowSpans(seg, ri)) {
+      let x = sa - offset;
+      while (x < sb - 1e-6) {
+        const bw = Math.min(BL, sb - x);
+        const x0 = ox + Math.max(x, sa), x1 = ox + Math.min(x + BL, sb);
         if (x1 - x0 > 0.01) {
           const y1 = y0 + BH;
           const verts = [
@@ -172,6 +194,7 @@ function exportOBJ(segments) {
           v += 8;
         }
         x += BL;
+      }
       }
     });
     ox += segLength(seg) + 1;
@@ -226,21 +249,7 @@ function WallPreview({ seg, t }) {
     // stepped: rows are top-aligned; runs shorter than this row are absent.
     // Draw the row's spans: walk runs left→right, include run if courses ≥ maxC-ri… wait rows already encode length,
     // but for stepped we must place spans at correct x. Build spans:
-    let spans = [];
-    if (seg.mode === "stepped") {
-      let x = 0;
-      for (const s of seg.steps) {
-        if (s.courses >= maxC - ri) spans.push([x, x + s.len]);
-        x += s.len;
-      }
-      // merge adjacent
-      spans = spans.reduce((a, sp) => {
-        const last = a[a.length - 1];
-        if (last && Math.abs(last[1] - sp[0]) < 1e-6) last[1] = sp[1];
-        else a.push([...sp]);
-        return a;
-      }, []);
-    } else spans = [[0, seg.length]];
+    const spans = rowSpans(seg, ri);
 
     for (const [sa, sb] of spans) {
       const offset = rowOffset(ri, maxC);
@@ -269,7 +278,7 @@ function WallPreview({ seg, t }) {
   if (seg.mode === "stepped") {
     let x = 0;
     for (const s of seg.steps) {
-      const y = yTop + maxC * cH - (maxC - s.courses) * cH;
+      const y = yTop + s.courses * cH;
       els.push(
         <rect key={"ft" + x} x={x0 + x * pxm - 6} y={y} width={s.len * pxm + 12} height={12}
           fill="#D8D5CD" stroke={LINE} />
@@ -286,8 +295,8 @@ function WallPreview({ seg, t }) {
   for (const r of runs) {
     for (let m = 0; m <= r.len + 1e-6; m += seg.vcc / 1000) {
       const x = x0 + (rx + Math.min(m, r.len)) * pxm;
-      const yb = yTop + maxC * cH - (maxC - r.courses) * cH + 8;
-      els.push(<line key={`v${rx}-${m}`} x1={x} y1={yb} x2={x} y2={yTop + (maxC - r.courses) * cH - 4}
+      const yb = yTop + r.courses * cH + 8;
+      els.push(<line key={`v${rx}-${m}`} x1={x} y1={yb} x2={x} y2={yTop - 4}
         stroke={REBAR} strokeWidth="1.4" opacity="0.85" />);
     }
     rx += r.len;
@@ -685,6 +694,17 @@ export default function BlockCalc() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: `2px solid ${INK}` }}>
+                      <td className="px-3 py-2 font-bold" style={{ fontFamily: "'Archivo'" }}>{t.total}</td>
+                      <td className="px-3 py-2 font-semibold">{fmt(totals.area)}</td>
+                      <td className="px-3 py-2 font-semibold" style={{ color: REBAR }}>{totals.blocks}</td>
+                      <td className="px-3 py-2 font-semibold" style={{ color: REBAR }}>{fmt(totals.fillM3, 2)}</td>
+                      <td className="px-3 py-2 font-semibold">{fmt(totals.hKg, 0)}</td>
+                      <td className="px-3 py-2 font-semibold">{fmt(totals.vKg, 0)}</td>
+                      <td className="px-3 py-2"></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
 

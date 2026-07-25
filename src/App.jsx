@@ -370,17 +370,31 @@ function FootingCalc({ t, wastePct }) {
 
 // ---------- main ----------
 const STORE_KEY = "blockcalc-state-v1";
+function migrate(state) {
+  if (!state || typeof state !== "object") return state;
+  const rename = { VB150: "MH150PRO", MH200: "MH200PRO" };
+  if (Array.isArray(state.segments)) {
+    state.segments = state.segments.map(s => (s && rename[s.type]) ? { ...s, type: rename[s.type] } : s);
+  }
+  // Menekki changed from l/m² to l/block; if legacy values look like l/m² (>30) or keys stale, reset.
+  if (state.menekki) {
+    const looksLegacy = Object.keys(state.menekki).some(k => rename[k] || (state.menekki[k] ?? 0) > 30);
+    if (looksLegacy) state.menekki = { MH150PRO: 9.4, MH200PRO: 14.4, EMH300: 13.8 };
+  }
+  return state;
+}
+
 function loadInitial() {
   try {
     const h = window.location.hash;
     if (h.startsWith("#s=")) {
       const json = decodeURIComponent(escape(atob(h.slice(3))));
-      return JSON.parse(json);
+      return migrate(JSON.parse(json));
     }
   } catch {}
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return migrate(JSON.parse(raw));
   } catch {}
   return null;
 }

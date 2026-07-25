@@ -6,9 +6,9 @@ const INK = "#22252A", PAPER = "#EBEAE6", CARD = "#FFFFFF", REBAR = "#C2372B",
 
 // ---------- block presets ----------
 const BLOCK_PRESETS = {
-  VB150: { label: "VB150 · 150 mm", width: 150, fill: 9.4, perPallet: 72, wallKgM2: 350 },
-  MH200: { label: "MH200 · 200 mm", width: 200, fill: 9.4, perPallet: 60, wallKgM2: 450 },
-  EMH300: { label: "EMH300 · 300 mm", width: 300, fill: 13.8, perPallet: 40, wallKgM2: 420 },
+  MH150PRO: { label: "MH-150PRO · 150 mm", width: 150, fillPerBlock: 9.4, perPallet: 72, wallKgM2: 350 },
+  MH200PRO: { label: "MH-200PRO · 200 mm", width: 200, fillPerBlock: 14.4, perPallet: 60, wallKgM2: 450 },
+  EMH300: { label: "EMH-300 · 300 mm", width: 300, fillPerBlock: 13.8, perPallet: 40, wallKgM2: 420 },
 };
 const BL = 0.6, BH = 0.2, KG = { 8: 0.395, 10: 0.617, 12: 0.888 };
 const uid = () => Math.random().toString(36).slice(2, 8);
@@ -119,11 +119,6 @@ function cutList(seg) {
   const rowsAll = courseRows(seg);
   const maxC = rowsAll.length;
   return rowsAll.map((row, i) => {
-    // For a row of length L (in meters), we need ceil(L/BL) bricks
-    // BL = 0.6m (brick length)
-    const consumed = Math.ceil(row.length / BL);
-    
-    // Preserve the existing cut logic for visualization purposes, but don't use it for block counting
     const offset = rowOffset(i, maxC);
     let full = 0; const cuts = [];
     for (const [sa, sb] of rowSpans(seg, i)) {
@@ -135,8 +130,7 @@ function cutList(seg) {
       if (offset > 0 && spanL > offset) cuts.push(300);
       if (rem > 0.02) cuts.push(Math.round(rem * 1000));
     }
-    
-    // Use the accurate consumed count
+    const consumed = full + Math.ceil(cuts.reduce((a, c) => a + c, 0) / 600);
     return { i, L: row.length, full, cuts, consumed };
   });
 }
@@ -147,9 +141,12 @@ function calcWall(seg, opts) {
   const waste = 1 + opts.wastePct / 100;
   const rows = courseRows(seg);
   const cl = cutList(seg);
-  const blocksRaw = cl.reduce((a, r) => a + r.consumed, 0);
+  // Simple site method: blocks per course = ceil(length / 0.6), summed over courses
+  const blocksRaw = rows.reduce((a, r) => a + Math.ceil(r.length / BL - 1e-9), 0);
   const blocks = Math.ceil(blocksRaw * waste);
-  const fillM3 = (area * (opts.menekki[seg.type] ?? preset.fill) * waste) / 1000;
+  // Fill concrete: litres per block × total blocks (incl. waste), converted to m³
+  const fillPerBlock = opts.menekki[seg.type] ?? preset.fillPerBlock;
+  const fillM3 = (blocks * fillPerBlock) / 1000;
   // horizontal rebar: every Nth course, hCount bars per reinforced row
   const hRows = rows.filter((_, i) => (rows.length - i) % seg.hEvery === 0); // count from bottom
   const hLen = hRows.reduce((a, r) => a + r.length, 0) * seg.hCount * 1.1;
@@ -393,11 +390,11 @@ export default function BlockCalc() {
   const [lang, setLang] = useState(saved?.lang || "en");
   const t = T[lang];
   const [wastePct, setWastePct] = useState(saved?.wastePct ?? 7);
-  const [menekki, setMenekki] = useState(saved?.menekki || { VB150: 9.4, MH200: 9.4, EMH300: 13.8 });
+  const [menekki, setMenekki] = useState(saved?.menekki || { MH150PRO: 9.4, MH200PRO: 14.4, EMH300: 13.8 });
   const [tab, setTab] = useState("walls");
   const [segments, setSegments] = useState(saved?.segments || [
     {
-      id: uid(), name: "Wall A", type: "VB150", openingsM2: 0,
+      id: uid(), name: "Wall A", type: "MH150PRO", openingsM2: 0,
       mode: "stepped", length: 10, courses: 6,
       steps: [{ len: 3.5, courses: 5 }, { len: 3.5, courses: 6 }, { len: 3, courses: 7 }],
       hEvery: 2, hCount: 2, hDia: 8, vcc: 600, vDia: 10,
@@ -440,7 +437,7 @@ export default function BlockCalc() {
 
   const addSegment = () => {
     const s = {
-      id: uid(), name: `Wall ${String.fromCharCode(65 + segments.length)}`, type: "VB150",
+      id: uid(), name: `Wall ${String.fromCharCode(65 + segments.length)}`, type: "MH150PRO",
       openingsM2: 0, mode: "uniform", length: 4, courses: 6, steps: [{ len: 4, courses: 6 }],
       hEvery: 2, hCount: 2, hDia: 8, vcc: 600, vDia: 10,
     };
@@ -453,7 +450,7 @@ export default function BlockCalc() {
   const loadExample = () => {
     const ex = [
       {
-        id: uid(), name: "Tupa S+N walls", type: "VB150", openingsM2: 0.6, mode: "stepped",
+        id: uid(), name: "Tupa S+N walls", type: "MH150PRO", openingsM2: 0.6, mode: "stepped",
         length: 12, courses: 7,
         steps: [{ len: 4, courses: 6 }, { len: 4.2, courses: 7 }, { len: 3.8, courses: 8 }],
         hEvery: 2, hCount: 2, hDia: 8, vcc: 600, vDia: 10,
@@ -640,7 +637,7 @@ export default function BlockCalc() {
                     value={wastePct} onChange={(e) => setWastePct(+e.target.value || 0)} />
                 </label>
                 {Object.keys(BLOCK_PRESETS).map((k) => (
-                  <label key={k} className="text-xs flex flex-col gap-1" style={{ color: MUTED }}>{t.fill} {k} (l/m²)
+                  <label key={k} className="text-xs flex flex-col gap-1" style={{ color: MUTED }}>{t.fill} {k} (l/block)
                     <input type="number" min="0" className={inputCls} style={inputStyle} value={menekki[k]}
                       onChange={(e) => setMenekki((m) => ({ ...m, [k]: +e.target.value || 0 }))} />
                   </label>

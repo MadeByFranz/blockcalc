@@ -1,16 +1,19 @@
 import React, { useMemo, useState } from "react";
+
 // ---------- theme ----------
 const INK = "#22252A", PAPER = "#EBEAE6", CARD = "#FFFFFF", REBAR = "#C2372B",
   LINE = "#C9C7C1", MUTED = "#6E7076", HILITE = "#FBF7EF";
+
 // ---------- block presets ----------
 const BLOCK_PRESETS = {
-  VB150: { label: "VB150 · 150 mm", width: 150, fill: 78, perPallet: 72, wallKgM2: 350 },
+  VB150: { label: "VB150 · 150 mm", width: 150, fill: 9.4, perPallet: 72, wallKgM2: 350 },
   MH200: { label: "MH200 · 200 mm", width: 200, fill: 9.4, perPallet: 60, wallKgM2: 450 },
   EMH300: { label: "EMH300 · 300 mm", width: 300, fill: 13.8, perPallet: 40, wallKgM2: 420 },
 };
 const BL = 0.6, BH = 0.2, KG = { 8: 0.395, 10: 0.617, 12: 0.888 };
 const uid = () => Math.random().toString(36).slice(2, 8);
 const fmt = (n, d = 1) => Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+
 // ---------- i18n ----------
 const T = {
   en: {
@@ -71,6 +74,7 @@ const T = {
     segment: "Sektion",
   },
 };
+
 // ---------- geometry helpers ----------
 // A wall is either uniform (length × courses) or stepped: sub-runs share a common TOP,
 // each run has its own course count downward (footing steps à 200 mm).
@@ -90,8 +94,10 @@ function courseRows(seg) {
 }
 const segLength = (seg) => (seg.mode === "stepped" ? seg.steps.reduce((a, s) => a + s.len, 0) : seg.length);
 const segArea = (seg) => courseRows(seg).reduce((a, r) => a + r.length * BH, 0) - (Number(seg.openingsM2) || 0);
+
 // cut list per course with running-bond stagger (odd rows start with a 300 half)
 const rowOffset = (idxFromTop, maxC) => ((maxC - idxFromTop) % 2 === 0 ? 0.3 : 0); // bottom course starts full
+
 // spans (x-ranges in m) occupied by course row `ri` (0 = top). Common top: a run
 // with c courses occupies the TOP c rows; only deeper runs reach the bottom rows.
 function rowSpans(seg, ri) {
@@ -108,6 +114,7 @@ function rowSpans(seg, ri) {
     return a;
   }, []);
 }
+
 function cutList(seg) {
   const rowsAll = courseRows(seg);
   const maxC = rowsAll.length;
@@ -133,6 +140,7 @@ function cutList(seg) {
     return { i, L: row.length, full, cuts, consumed };
   });
 }
+
 function calcWall(seg, opts) {
   const preset = BLOCK_PRESETS[seg.type];
   const area = Math.max(0, segArea(seg));
@@ -163,6 +171,7 @@ function calcWall(seg, opts) {
     lifts: Math.ceil(maxC / 6), maxC, cl,
   };
 }
+
 // ---------- OBJ export ----------
 function exportOBJ(segments) {
   let v = 0; const out = ["# BlockCalc OBJ export — blocks as cuboids"];
@@ -203,6 +212,7 @@ function exportOBJ(segments) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
 // ---------- UI atoms ----------
 function DimHeader({ children }) {
   return (
@@ -227,6 +237,7 @@ function Stat({ label, value, unit, accent }) {
     </div>
   );
 }
+
 // ---------- elevation preview (uniform + stepped) ----------
 function WallPreview({ seg, t }) {
   const rows = courseRows(seg);
@@ -237,6 +248,7 @@ function WallPreview({ seg, t }) {
   const cH = Math.min(24, Math.max(10, 180 / maxC));
   const H = maxC * cH + 86;
   const x0 = PAD, yTop = 30;
+
   const els = [];
   rows.forEach((row, ri) => {
     const y = yTop + ri * cH;
@@ -244,6 +256,7 @@ function WallPreview({ seg, t }) {
     // Draw the row's spans: walk runs left→right, include run if courses ≥ maxC-ri… wait rows already encode length,
     // but for stepped we must place spans at correct x. Build spans:
     const spans = rowSpans(seg, ri);
+
     for (const [sa, sb] of spans) {
       const offset = rowOffset(ri, maxC);
       let x = sa - offset;
@@ -266,6 +279,7 @@ function WallPreview({ seg, t }) {
         );
     }
   });
+
   // footing steps under stepped wall
   if (seg.mode === "stepped") {
     let x = 0;
@@ -280,6 +294,7 @@ function WallPreview({ seg, t }) {
   } else {
     els.push(<rect key="ft" x={x0 - 10} y={yTop + maxC * cH} width={totalL * pxm + 20} height={12} fill="#D8D5CD" stroke={LINE} />);
   }
+
   // vertical rebar ticks
   const runs = seg.mode === "stepped" ? seg.steps : [{ len: seg.length, courses: seg.courses }];
   let rx = 0;
@@ -292,6 +307,7 @@ function WallPreview({ seg, t }) {
     }
     rx += r.len;
   }
+
   // pour lift line at 6 courses above the DEEPEST footing
   if (maxC > 6) {
     const y = yTop + (maxC - 6) * cH;
@@ -304,6 +320,7 @@ function WallPreview({ seg, t }) {
       </g>
     );
   }
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Elevation of ${seg.name}`}>
       {els}
@@ -317,6 +334,7 @@ function WallPreview({ seg, t }) {
     </svg>
   );
 }
+
 // ---------- footing calculator ----------
 function FootingCalc({ t, wastePct }) {
   const [f, setF] = useState({ len: 32.5, w: 600, h: 250, nBars: 3, dia: 10, dowelCc: 600, dowelLen: 750 });
@@ -352,6 +370,7 @@ function FootingCalc({ t, wastePct }) {
     </div>
   );
 }
+
 // ---------- main ----------
 const STORE_KEY = "blockcalc-state-v1";
 function loadInitial() {
@@ -368,12 +387,13 @@ function loadInitial() {
   } catch {}
   return null;
 }
+
 export default function BlockCalc() {
   const saved = useMemo(loadInitial, []);
   const [lang, setLang] = useState(saved?.lang || "en");
   const t = T[lang];
   const [wastePct, setWastePct] = useState(saved?.wastePct ?? 7);
-  const [menekki, setMenekki] = useState(saved?.menekki || { VB150: 78, MH200: 120, EMH300: 90 });
+  const [menekki, setMenekki] = useState(saved?.menekki || { VB150: 9.4, MH200: 9.4, EMH300: 13.8 });
   const [tab, setTab] = useState("walls");
   const [segments, setSegments] = useState(saved?.segments || [
     {
@@ -384,10 +404,12 @@ export default function BlockCalc() {
     },
   ]);
   const [copied, setCopied] = useState(false);
+
   // autosave (guarded — fails silently where storage is unavailable)
   React.useEffect(() => {
     try { localStorage.setItem(STORE_KEY, JSON.stringify({ lang, wastePct, menekki, segments })); } catch {}
   }, [lang, wastePct, menekki, segments]);
+
   const shareLink = () => {
     try {
       const json = JSON.stringify({ lang, wastePct, menekki, segments });
@@ -400,6 +422,7 @@ export default function BlockCalc() {
   };
   const [selected, setSelected] = useState(segments[0].id);
   const opts = { wastePct, menekki };
+
   const results = useMemo(() => segments.map((s) => ({ seg: s, r: calcWall(s, opts) })), [segments, wastePct, menekki]);
   const totals = useMemo(() => {
     const t0 = { area: 0, blocks: 0, fillM3: 0, hKg: 0, vKg: 0, hLen: 0, vLen: 0, vBars: 0, grossVol: 0, weightKg: 0 };
@@ -410,9 +433,11 @@ export default function BlockCalc() {
     }
     return { ...t0, byType };
   }, [results]);
+
   const update = (id, patch) => setSegments((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const sel = segments.find((s) => s.id === selected) || segments[0];
   const selR = results.find((x) => x.seg.id === selected)?.r;
+
   const addSegment = () => {
     const s = {
       id: uid(), name: `Wall ${String.fromCharCode(65 + segments.length)}`, type: "VB150",
@@ -441,9 +466,11 @@ export default function BlockCalc() {
     ];
     setSegments(ex); setSelected(ex[0].id);
   };
+
   const inputCls = "w-full rounded px-2 py-1.5 font-mono text-sm border focus:outline-none focus:ring-2";
   const inputStyle = { borderColor: LINE, color: INK, background: "#FBFAF8" };
   const smallSel = "rounded px-1.5 py-1 font-mono text-xs border";
+
   return (
     <div className="min-h-screen" style={{ background: PAPER, color: INK, fontFamily: "'Archivo','Helvetica Neue',sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap');
@@ -451,6 +478,7 @@ export default function BlockCalc() {
         input:focus,select:focus{--tw-ring-color:${REBAR}33}
         @media print{.no-print{display:none!important}body{background:#fff!important}.print-block{box-shadow:none!important;border-color:#999!important}}
         @media (prefers-reduced-motion: reduce){*{transition:none!important}}`}</style>
+
       <header className="border-b-2 no-print" style={{ borderColor: INK, background: CARD }}>
         <div className="max-w-6xl mx-auto px-5 py-4 flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -483,6 +511,7 @@ export default function BlockCalc() {
           ))}
         </div>
       </header>
+
       <main className="max-w-6xl mx-auto px-5 py-6">
         {tab === "footing" ? (
           <div className="grid gap-5 max-w-3xl">
@@ -514,6 +543,7 @@ export default function BlockCalc() {
                     <button aria-label="remove" onClick={(e) => { e.stopPropagation(); removeSegment(seg.id); }}
                       className="shrink-0 rounded px-2 py-1 text-sm border hover:opacity-70" style={{ borderColor: LINE, color: MUTED }}>✕</button>
                   </div>
+
                   {seg.mode === "uniform" ? (
                     <div className="grid grid-cols-2 gap-2">
                       <label className="text-xs flex flex-col gap-1" style={{ color: MUTED }}>{t.length}
@@ -549,6 +579,7 @@ export default function BlockCalc() {
                         className="rounded border border-dashed py-1 text-xs" style={{ borderColor: MUTED, color: MUTED }}>{t.addStep}</button>
                     </div>
                   )}
+
                   <div className="grid grid-cols-2 gap-2">
                     <label className="text-xs flex flex-col gap-1" style={{ color: MUTED }}>{t.type}
                       <select className={inputCls} style={inputStyle} value={seg.type} onChange={(e) => update(seg.id, { type: e.target.value })}>
@@ -560,6 +591,7 @@ export default function BlockCalc() {
                         value={seg.openingsM2} onChange={(e) => update(seg.id, { openingsM2: +e.target.value || 0 })} />
                     </label>
                   </div>
+
                   {/* rebar config */}
                   <div className="grid grid-cols-3 gap-2 border-t pt-2" style={{ borderColor: LINE }}>
                     <label className="text-xs flex flex-col gap-1" style={{ color: MUTED }}>{t.hEvery}
@@ -593,12 +625,14 @@ export default function BlockCalc() {
                   </div>
                 </div>
               ))}
+
               <div className="flex gap-2">
                 <button onClick={addSegment} className="flex-1 rounded-lg border-2 border-dashed py-2 text-sm font-semibold hover:opacity-70"
                   style={{ borderColor: MUTED, color: INK }}>{t.addWall}</button>
                 <button onClick={loadExample} className="rounded-lg border py-2 px-3 text-sm hover:opacity-70"
                   style={{ borderColor: LINE, color: MUTED, background: CARD }}>{t.example}</button>
               </div>
+
               <DimHeader>{t.assumptions}</DimHeader>
               <div className="rounded-lg border p-3 grid grid-cols-2 gap-3" style={{ background: CARD, borderColor: LINE }}>
                 <label className="text-xs flex flex-col gap-1" style={{ color: MUTED }}>{t.waste}
@@ -613,12 +647,14 @@ export default function BlockCalc() {
                 ))}
               </div>
             </section>
+
             {/* results */}
             <section className="lg:col-span-3 flex flex-col gap-5">
               <DimHeader>{t.elevation} · {sel?.name}</DimHeader>
               <div className="rounded-lg border p-3 print-block" style={{ background: CARD, borderColor: LINE }}>
                 {sel && <WallPreview seg={sel} t={t} />}
               </div>
+
               <DimHeader>{t.schedule}</DimHeader>
               <div className="rounded-lg border overflow-hidden print-block" style={{ background: CARD, borderColor: LINE }}>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 px-4">
@@ -639,6 +675,7 @@ export default function BlockCalc() {
                 </div>
                 <div className="border-t px-4 py-2 text-xs" style={{ borderColor: LINE, color: MUTED }}>{t.volNote}</div>
               </div>
+
               {/* per-segment table */}
               <div className="rounded-lg border overflow-x-auto print-block" style={{ background: CARD, borderColor: LINE }}>
                 <table className="w-full text-sm font-mono">
@@ -676,6 +713,7 @@ export default function BlockCalc() {
                   </tfoot>
                 </table>
               </div>
+
               {/* cut list */}
               <DimHeader>{t.cutlist} · {sel?.name}</DimHeader>
               <div className="rounded-lg border overflow-x-auto print-block" style={{ background: CARD, borderColor: LINE }}>
@@ -703,6 +741,7 @@ export default function BlockCalc() {
                   </tbody>
                 </table>
               </div>
+
               <p className="text-xs leading-5 pb-6" style={{ color: MUTED }}>{t.disclaimer}</p>
             </section>
           </div>

@@ -17,3 +17,8 @@ one-time setup: repo **Settings → Pages → Source: GitHub Actions**.
   migrate to the Tailwind Vite plugin later.
 - Blocks module 600×200 mm. Fill menekki defaults are editable —
   always check the manufacturer's pallet label and your structural drawings.
+
+
+or go here:
+
+https://madebyfranz.github.io/blockcalc/
